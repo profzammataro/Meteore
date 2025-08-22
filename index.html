@@ -270,10 +270,14 @@
         let meteors = [];
         let lastLevelUp = 0;
         let lives = 3;
+        let gameLoopId = null;
         
         // Touch controls
         let touchActive = false;
         let touchCenter = { x: 0, y: 0 };
+        
+        // Variabili per la gestione degli event listeners
+        let touchEventsRegistered = false;
         
         // Inizializza posizione pallina
         updateBallPosition();
@@ -281,14 +285,33 @@
         function startGame() {
             permissionPanel.style.display = 'none';
             
-            // Inizializza controlli touch
-            document.addEventListener('touchstart', handleTouchStart);
-            document.addEventListener('touchmove', handleTouchMove);
-            document.addEventListener('touchend', handleTouchEnd);
+            // Rimuovi event listeners esistenti se presenti
+            removeEventListeners();
+            
+            // Registra nuovi event listeners
+            registerEventListeners();
             
             gameActive = true;
             updateLivesDisplay();
             startGameLoop();
+        }
+        
+        function registerEventListeners() {
+            if (!touchEventsRegistered) {
+                document.addEventListener('touchstart', handleTouchStart, { passive: false });
+                document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                document.addEventListener('touchend', handleTouchEnd, { passive: false });
+                touchEventsRegistered = true;
+            }
+        }
+        
+        function removeEventListeners() {
+            if (touchEventsRegistered) {
+                document.removeEventListener('touchstart', handleTouchStart);
+                document.removeEventListener('touchmove', handleTouchMove);
+                document.removeEventListener('touchend', handleTouchEnd);
+                touchEventsRegistered = false;
+            }
         }
         
         function handleTouchStart(e) {
@@ -329,6 +352,11 @@
         }
         
         function startGameLoop() {
+            // Ferma il loop precedente se esiste
+            if (gameLoopId) {
+                cancelAnimationFrame(gameLoopId);
+            }
+            
             function gameLoop() {
                 if (gameActive) {
                     updateBall();
@@ -336,10 +364,19 @@
                     spawnMeteors();
                     checkCollisions();
                     updateUI();
+                    gameLoopId = requestAnimationFrame(gameLoop);
+                } else {
+                    gameLoopId = null;
                 }
-                requestAnimationFrame(gameLoop);
             }
-            gameLoop();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+        
+        function stopGameLoop() {
+            if (gameLoopId) {
+                cancelAnimationFrame(gameLoopId);
+                gameLoopId = null;
+            }
         }
         
         function updateBall() {
@@ -503,7 +540,12 @@
         }
         
         function gameOver() {
+            // Ferma immediatamente il gioco
             gameActive = false;
+            stopGameLoop();
+            
+            // Reset stato touch
+            touchActive = false;
             
             // Mostra messaggio game over
             gameOverMessage.style.display = 'block';
@@ -525,6 +567,7 @@
         }
         
         function resetToLevel1() {
+            // VALORI INIZIALI HARDCODED per garantire il reset
             meteorsEvaded = 0;
             currentLevel = 1;
             meteorSpeed = 2;           // Velocità iniziale livello 1
@@ -535,11 +578,20 @@
             // Reset posizione pallina
             ballPosition = { x: window.innerWidth / 2, y: window.innerHeight - 100 };
             ballVelocity = { x: 0, y: 0 };
+            touchActive = false;
             updateBallPosition();
             
-            // Rimuovi tutte le meteore
-            meteors.forEach(meteor => meteor.element.remove());
+            // Rimuovi tutte le meteore dal DOM e dall'array
+            meteors.forEach(meteor => {
+                if (meteor.element && meteor.element.parentNode) {
+                    meteor.element.remove();
+                }
+            });
             meteors = [];
+            
+            // Rimuovi anche eventuali particelle rimaste
+            let particles = document.querySelectorAll('.particle');
+            particles.forEach(particle => particle.remove());
             
             // Aggiorna UI
             updateUI();
@@ -552,7 +604,9 @@
         }
         
         function resetGame() {
+            // Ferma tutto
             gameActive = false;
+            stopGameLoop();
             
             // Reset completo al livello 1
             resetToLevel1();
@@ -568,23 +622,11 @@
             }
         }
         
-        // Previeni scroll su mobile
+        // Previeni scroll su mobile - gestito meglio negli event listeners specifici
         document.addEventListener('touchmove', function(e) {
-            e.preventDefault();
-        }, { passive: false });
-    </script>
-</body>
-</html>      
-            // Riavvia il gioco se era già iniziato
-            if (permissionPanel.style.display === 'none') {
-                gameActive = true;
-                startGameLoop();
+            if (touchEventsRegistered) {
+                e.preventDefault();
             }
-        }
-        
-        // Previeni scroll su mobile
-        document.addEventListener('touchmove', function(e) {
-            e.preventDefault();
         }, { passive: false });
     </script>
 </body>
