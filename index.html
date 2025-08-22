@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meteor Dodge Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+            color: white;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .ball {
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #00d4ff);
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+            transition: transform 0.1s ease;
+            z-index: 10;
+        }
+        
+        .meteor {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle at 30% 30%, #ff6b35, #8B0000);
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 0 15px rgba(255, 107, 53, 0.8);
+            animation: meteorGlow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes meteorGlow {
+            0% { box-shadow: 0 0 15px rgba(255, 107, 53, 0.8); }
+            100% { box-shadow: 0 0 25px rgba(255, 107, 53, 1), 0 0 35px rgba(255, 0, 0, 0.5); }
+        }
+        
+        .game-over-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff4757;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            display: none;
+            animation: gameOverPulse 0.8s ease-in-out;
+            z-index: 30;
+        }
+        
+        @keyframes gameOverPulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        
+        .level-up-message {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            font-weight: bold;
+            color: #2ed573;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            display: none;
+            animation: levelUpCelebration 2s ease-in-out;
+            z-index: 25;
+        }
+        
+        @keyframes levelUpCelebration {
+            0% { transform: translate(-50%, -50%) scale(0) rotate(0deg); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.3) rotate(180deg); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1) rotate(360deg); opacity: 0; }
+        }
+        
+        .score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 20;
+        }
+        
+        .level-display {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            font-size: 18px;
+            color: #2ed573;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 20;
+        }
+        
+        .lives-display {
+            position: absolute;
+            top: 100px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 20;
+        }
+        
+        .life-ball {
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #00d4ff);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+            transition: all 0.3s ease;
+        }
+        
+        .life-ball.lost {
+            background: radial-gradient(circle at 30% 30%, #666, #333);
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+            transform: scale(0.7);
+            opacity: 0.5;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.8);
+            text-align: center;
+            font-size: 16px;
+            background: rgba(0,0,0,0.5);
+            padding: 15px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .reset-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.5);
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .reset-btn:hover {
+            background-color: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.8);
+        }
+        
+        .permission-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.95);
+            color: #333;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 300px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+        
+        .permission-btn {
+            padding: 12px 24px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: transform 0.2s ease;
+        }
+        
+        .permission-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #2ed573;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: particleFloat 1s ease-out forwards;
+        }
+        
+        @keyframes particleFloat {
+            0% { 
+                transform: scale(1); 
+                opacity: 1; 
+            }
+            100% { 
+                transform: scale(0) translateY(-50px); 
+                opacity: 0; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="ball" id="ball"></div>
+        
+        <div class="score-display" id="scoreDisplay">Meteore Evitate: 0</div>
+        <div class="level-display" id="levelDisplay">Livello: 1</div>
+        <div class="lives-display" id="livesDisplay">
+            <div class="life-ball" id="life1"></div>
+            <div class="life-ball" id="life2"></div>
+            <div class="life-ball" id="life3"></div>
+        </div>
+        
+        <div class="game-over-message" id="gameOverMessage">GAME OVER!</div>
+        <div class="level-up-message" id="levelUpMessage">LIVELLO SUPERATO!</div>
+        
+        <div class="permission-panel" id="permissionPanel">
+            <h3>🎮 Meteor Dodge</h3>
+            <p>Evita le meteore che cadono!</p>
+            <p>Tocca e sposta il dito per controllare la pallina blu.</p>
+            <button class="permission-btn" onclick="startGame()">Inizia Gioco</button>
+        </div>
+        
+        <button class="reset-btn" onclick="resetGame()">Reset</button>
+    </div>
+
+    <script>
+        let ball = document.getElementById('ball');
+        let gameOverMessage = document.getElementById('gameOverMessage');
+        let levelUpMessage = document.getElementById('levelUpMessage');
+        let permissionPanel = document.getElementById('permissionPanel');
+        let scoreDisplay = document.getElementById('scoreDisplay');
+        let levelDisplay = document.getElementById('levelDisplay');
+        
+        let ballPosition = { x: window.innerWidth / 2, y: window.innerHeight - 100 };
+        let ballVelocity = { x: 0, y: 0 };
+        
+        // Game state
+        let gameActive = false;
+        let meteorsEvaded = 0;
+        let currentLevel = 1;
+        let meteorSpeed = 2;
+        let meteorSpawnRate = 0.02;
+        let meteors = [];
+        let lastLevelUp = 0;
+        let lives = 3;
+        
+        // Touch controls
+        let touchActive = false;
+        let touchCenter = { x: 0, y: 0 };
+        
+        // Inizializza posizione pallina
+        updateBallPosition();
+        
+        function startGame() {
+            permissionPanel.style.display = 'none';
+            
+            // Inizializza controlli touch
+            document.addEventListener('touchstart', handleTouchStart);
+            document.addEventListener('touchmove', handleTouchMove);
+            document.addEventListener('touchend', handleTouchEnd);
+            
+            gameActive = true;
+            updateLivesDisplay();
+            startGameLoop();
+        }
+        
+        function handleTouchStart(e) {
+            e.preventDefault();
+            if (!gameActive) return;
+            
+            touchActive = true;
+            touchCenter.x = e.touches[0].clientX;
+            touchCenter.y = e.touches[0].clientY;
+        }
+        
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (!touchActive || !gameActive) return;
+            
+            let currentX = e.touches[0].clientX;
+            let currentY = e.touches[0].clientY;
+            
+            // Calcola la velocità basata sul movimento touch
+            let deltaX = (currentX - touchCenter.x) / 30;
+            let deltaY = (currentY - touchCenter.y) / 30;
+            
+            // Limita i valori
+            deltaX = Math.max(-8, Math.min(8, deltaX));
+            deltaY = Math.max(-8, Math.min(8, deltaY));
+            
+            ballVelocity.x = deltaX;
+            ballVelocity.y = deltaY;
+        }
+        
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            touchActive = false;
+            
+            // Rallenta gradualmente
+            ballVelocity.x *= 0.8;
+            ballVelocity.y *= 0.8;
+        }
+        
+        function startGameLoop() {
+            function gameLoop() {
+                if (gameActive) {
+                    updateBall();
+                    updateMeteors();
+                    spawnMeteors();
+                    checkCollisions();
+                    updateUI();
+                }
+                requestAnimationFrame(gameLoop);
+            }
+            gameLoop();
+        }
+        
+        function updateBall() {
+            // Applica attrito quando non si tocca
+            if (!touchActive) {
+                ballVelocity.x *= 0.92;
+                ballVelocity.y *= 0.92;
+            }
+            
+            // Aggiorna posizione
+            ballPosition.x += ballVelocity.x;
+            ballPosition.y += ballVelocity.y;
+            
+            // Mantieni la pallina nei limiti dello schermo
+            ballPosition.x = Math.max(20, Math.min(window.innerWidth - 20, ballPosition.x));
+            ballPosition.y = Math.max(20, Math.min(window.innerHeight - 20, ballPosition.y));
+            
+            updateBallPosition();
+        }
+        
+        function updateBallPosition() {
+            ball.style.left = (ballPosition.x - 20) + 'px';
+            ball.style.top = (ballPosition.y - 20) + 'px';
+        }
+        
+        function spawnMeteors() {
+            if (Math.random() < meteorSpawnRate) {
+                let meteor = {
+                    x: Math.random() * (window.innerWidth - 50),
+                    y: -50,
+                    element: createMeteorElement()
+                };
+                meteors.push(meteor);
+            }
+        }
+        
+        function createMeteorElement() {
+            let meteorEl = document.createElement('div');
+            meteorEl.className = 'meteor';
+            document.querySelector('.game-container').appendChild(meteorEl);
+            return meteorEl;
+        }
+        
+        function updateMeteors() {
+            for (let i = meteors.length - 1; i >= 0; i--) {
+                let meteor = meteors[i];
+                meteor.y += meteorSpeed;
+                
+                // Aggiorna posizione visuale
+                meteor.element.style.left = meteor.x + 'px';
+                meteor.element.style.top = meteor.y + 'px';
+                
+                // Rimuovi meteore che sono uscite dallo schermo
+                if (meteor.y > window.innerHeight + 50) {
+                    meteor.element.remove();
+                    meteors.splice(i, 1);
+                    meteorsEvaded++;
+                    
+                    // Controlla level up
+                    if (meteorsEvaded > 0 && meteorsEvaded % 15 === 0 && meteorsEvaded !== lastLevelUp) {
+                        levelUp();
+                        lastLevelUp = meteorsEvaded;
+                    }
+                }
+            }
+        }
+        
+        function checkCollisions() {
+            for (let i = meteors.length - 1; i >= 0; i--) {
+                let meteor = meteors[i];
+                let distance = Math.sqrt(
+                    Math.pow(ballPosition.x - (meteor.x + 25), 2) + 
+                    Math.pow(ballPosition.y - (meteor.y + 25), 2)
+                );
+                
+                if (distance < 35) {
+                    // Rimuovi la meteora che ha colpito
+                    meteor.element.remove();
+                    meteors.splice(i, 1);
+                    
+                    // Perdi una vita
+                    loseLife();
+                    break;
+                }
+            }
+        }
+        
+        function loseLife() {
+            lives--;
+            updateLivesDisplay();
+            
+            // Effetto visuale di impatto
+            ball.style.transform = 'scale(1.3)';
+            ball.style.boxShadow = '0 0 30px rgba(255, 0, 0, 0.8)';
+            
+            setTimeout(() => {
+                ball.style.transform = 'scale(1)';
+                ball.style.boxShadow = '0 0 20px rgba(0, 212, 255, 0.6)';
+            }, 300);
+            
+            // Vibrazione
+            if ('vibrate' in navigator) {
+                navigator.vibrate([100, 50, 100]);
+            }
+            
+            // Controlla se il gioco è finito
+            if (lives <= 0) {
+                setTimeout(() => {
+                    gameOver();
+                }, 500);
+            }
+        }
+        
+        function updateLivesDisplay() {
+            for (let i = 1; i <= 3; i++) {
+                let lifeElement = document.getElementById(`life${i}`);
+                if (i <= lives) {
+                    lifeElement.classList.remove('lost');
+                } else {
+                    lifeElement.classList.add('lost');
+                }
+            }
+        }
+        
+        function levelUp() {
+            currentLevel++;
+            meteorSpeed += 0.8;
+            meteorSpawnRate += 0.005;
+            
+            // Mostra messaggio level up
+            levelUpMessage.style.display = 'block';
+            setTimeout(() => {
+                levelUpMessage.style.display = 'none';
+            }, 2000);
+            
+            // Effetti particelle
+            createCelebrationParticles();
+            
+            // Vibrazione se supportata
+            if ('vibrate' in navigator) {
+                navigator.vibrate([200, 100, 200, 100, 200]);
+            }
+        }
+        
+        function createCelebrationParticles() {
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                    let particle = document.createElement('div');
+                    particle.className = 'particle';
+                    particle.style.left = (ballPosition.x + Math.random() * 60 - 30) + 'px';
+                    particle.style.top = (ballPosition.y + Math.random() * 60 - 30) + 'px';
+                    particle.style.background = `hsl(${Math.random() * 60 + 120}, 70%, 60%)`;
+                    
+                    document.querySelector('.game-container').appendChild(particle);
+                    
+                    setTimeout(() => {
+                        particle.remove();
+                    }, 1000);
+                }, i * 50);
+            }
+        }
+        
+        function gameOver() {
+            gameActive = false;
+            
+            // Mostra messaggio game over
+            gameOverMessage.style.display = 'block';
+            
+            // Vibrazione se supportata
+            if ('vibrate' in navigator) {
+                navigator.vibrate([500, 200, 500]);
+            }
+            
+            setTimeout(() => {
+                gameOverMessage.style.display = 'none';
+                // Resetta completamente tutto al livello 1
+                resetToLevel1();
+                
+                // Riavvia il gioco
+                gameActive = true;
+                startGameLoop();
+            }, 3000);
+        }
+        
+        function resetToLevel1() {
+            meteorsEvaded = 0;
+            currentLevel = 1;
+            meteorSpeed = 2;           // Velocità iniziale livello 1
+            meteorSpawnRate = 0.02;    // Spawn rate iniziale livello 1
+            lastLevelUp = 0;
+            lives = 3;
+            
+            // Reset posizione pallina
+            ballPosition = { x: window.innerWidth / 2, y: window.innerHeight - 100 };
+            ballVelocity = { x: 0, y: 0 };
+            updateBallPosition();
+            
+            // Rimuovi tutte le meteore
+            meteors.forEach(meteor => meteor.element.remove());
+            meteors = [];
+            
+            // Aggiorna UI
+            updateUI();
+            updateLivesDisplay();
+        }
+        
+        function updateUI() {
+            scoreDisplay.textContent = `Meteore Evitate: ${meteorsEvaded}`;
+            levelDisplay.textContent = `Livello: ${currentLevel}`;
+        }
+        
+        function resetGame() {
+            gameActive = false;
+            
+            // Reset completo al livello 1
+            resetToLevel1();
+            
+            // Reset UI messages
+            gameOverMessage.style.display = 'none';
+            levelUpMessage.style.display = 'none';
+            
+            // Riavvia il gioco se era già iniziato
+            if (permissionPanel.style.display === 'none') {
+                gameActive = true;
+                startGameLoop();
+            }
+        }
+        
+        // Previeni scroll su mobile
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>      
+            // Riavvia il gioco se era già iniziato
+            if (permissionPanel.style.display === 'none') {
+                gameActive = true;
+                startGameLoop();
+            }
+        }
+        
+        // Previeni scroll su mobile
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
