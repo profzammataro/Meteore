@@ -497,6 +497,56 @@
             }
         }
         
+                // Controlli da tastiera (PC)
+        let keysPressed = {};
+
+        document.addEventListener("keydown", (e) => {
+            keysPressed[e.key] = true;
+        });
+
+        document.addEventListener("keyup", (e) => {
+            keysPressed[e.key] = false;
+        });
+
+        function handleKeyboardControls() {
+            if (!gameActive) return;
+
+            let speed = 5; // velocità di movimento con le frecce
+
+            if (keysPressed["ArrowLeft"]) {
+                ballVelocity.x = -speed;
+            }
+            if (keysPressed["ArrowRight"]) {
+                ballVelocity.x = speed;
+            }
+            if (keysPressed["ArrowUp"]) {
+                ballVelocity.y = -speed;
+            }
+            if (keysPressed["ArrowDown"]) {
+                ballVelocity.y = speed;
+            }
+        }
+
+                // Controlli con mouse (trascina la pallina)
+        let mouseActive = false;
+
+        document.addEventListener("mousedown", (e) => {
+            mouseActive = true;
+        });
+
+        document.addEventListener("mouseup", () => {
+            mouseActive = false;
+        });
+
+        document.addEventListener("mousemove", (e) => {
+            if (mouseActive && gameActive) {
+                ballPosition.x = e.clientX;
+                ballPosition.y = e.clientY;
+                updateBallPosition();
+            }
+        });
+
+
         function removeEventListeners() {
             if (touchEventsRegistered) {
                 document.removeEventListener('touchstart', handleTouchStart);
@@ -551,6 +601,7 @@
             
             function gameLoop() {
                 if (gameActive) {
+                    handleKeyboardControls(); // <<< aggiunto
                     updateBall();
                     updateMeteors();
                     spawnMeteors();
