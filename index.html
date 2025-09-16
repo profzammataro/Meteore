@@ -153,7 +153,7 @@
             backdrop-filter: blur(10px);
         }
         
-        .reset-btn {
+        .pause-btn {
             position: absolute;
             top: 20px;
             right: 20px;
@@ -165,11 +165,48 @@
             cursor: pointer;
             font-size: 14px;
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
-        .reset-btn:hover {
+        .pause-btn:hover {
             background-color: rgba(255,255,255,0.3);
             border-color: rgba(255,255,255,0.8);
+        }
+        
+        .pause-btn.paused {
+            background-color: rgba(46, 213, 115, 0.3);
+            border-color: rgba(46, 213, 115, 0.8);
+            color: #2ed573;
+        }
+        
+        .pause-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            backdrop-filter: blur(5px);
+        }
+        
+        .pause-message {
+            text-align: center;
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            animation: pausePulse 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes pausePulse {
+            0% { opacity: 0.7; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.05); }
         }
         
         .permission-panel {
@@ -290,7 +327,7 @@
 </head>
 <body>
     <div class="game-container">
-        <div class="ball" id="ball"></div>
+        <div class="ball" id="ball" style="left: 1260px; top: 1094px;"></div>
         
         <div class="score-display" id="scoreDisplay">Meteore Evitate: 0</div>
         <div class="level-display" id="levelDisplay">Livello: 1</div>
@@ -303,11 +340,41 @@
         <div class="game-over-message" id="gameOverMessage">GAME OVER!</div>
         <div class="level-up-message" id="levelUpMessage">LIVELLO SUPERATO!</div>
         
+        <div class="pause-overlay" id="pauseOverlay">
+            <div class="pause-message">
+                ⏸️ PAUSA<br>
+                <div style="font-size: 20px; margin-top: 20px; font-weight: normal;">
+                    Tocca il pulsante pausa per continuare
+                </div>
+            </div>
+        </div>
+        
         <div class="permission-panel" id="permissionPanel">
             <h3>🎮 Meteor Dodge</h3>
             <div class="leaderboard" id="leaderboard">
                 <h4>🏆 TOP 5</h4>
-                <div id="leaderboardList">Caricamento classifica...</div>
+                <div id="leaderboardList">
+                    <div class="leaderboard-entry">
+                        <span>🥇 Thomas</span>
+                        <span>686</span>
+                    </div>
+                    <div class="leaderboard-entry">
+                        <span>🥈 Thomas</span>
+                        <span>686</span>
+                    </div>
+                    <div class="leaderboard-entry">
+                        <span>🥉 Thomas</span>
+                        <span>670</span>
+                    </div>
+                    <div class="leaderboard-entry">
+                        <span>4. totti</span>
+                        <span>658</span>
+                    </div>
+                    <div class="leaderboard-entry">
+                        <span>5. totti</span>
+                        <span>658</span>
+                    </div>
+                </div>
             </div>
             <p>Evita le meteore che cadono!</p>
             <p>Tocca e sposta il dito per controllare la pallina blu.</p>
@@ -323,28 +390,13 @@
             <button class="permission-btn" onclick="saveScore()" id="saveScoreBtn">Salva Punteggio</button>
         </div>
         
-        <button class="reset-btn" onclick="resetGame()">Reset</button>
+        <button class="pause-btn" id="pauseBtn" onclick="togglePause()">
+            <span id="pauseIcon">⏸️</span>
+            <span id="pauseText">Pausa</span>
+        </button>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-    
     <script>
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyCvHzTl8z3KRZ4QkKgO5FKQwKmkFJAF6xg",
-            authDomain: "meteore-31062.firebaseapp.com",
-            databaseURL: "https://meteore-31062-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "meteore-31062",
-            storageBucket: "meteore-31062.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef123456"
-        };
-        
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-        
         let ball = document.getElementById('ball');
         let gameOverMessage = document.getElementById('gameOverMessage');
         let levelUpMessage = document.getElementById('levelUpMessage');
@@ -356,12 +408,17 @@
         let nicknameInput = document.getElementById('nicknameInput');
         let finalScore = document.getElementById('finalScore');
         let saveScoreBtn = document.getElementById('saveScoreBtn');
+        let pauseOverlay = document.getElementById('pauseOverlay');
+        let pauseBtn = document.getElementById('pauseBtn');
+        let pauseIcon = document.getElementById('pauseIcon');
+        let pauseText = document.getElementById('pauseText');
         
         let ballPosition = { x: window.innerWidth / 2, y: window.innerHeight - 100 };
         let ballVelocity = { x: 0, y: 0 };
         
         // Game state
         let gameActive = false;
+        let gamePaused = false;
         let meteorsEvaded = 0;
         let currentLevel = 1;
         let meteorSpeed = 2;
@@ -375,33 +432,21 @@
         let touchActive = false;
         let touchCenter = { x: 0, y: 0 };
         
-        // Variabili per la gestione degli event listeners
+        // Event listeners management
         let touchEventsRegistered = false;
         
-        // Leaderboard
-        let leaderboard = [];
+        // Leaderboard (simplified for demo)
+        let leaderboard = [
+            { nickname: "Thomas", score: 686 },
+            { nickname: "Thomas", score: 686 },
+            { nickname: "Thomas", score: 670 },
+            { nickname: "totti", score: 658 },
+            { nickname: "totti", score: 658 }
+        ];
         
-        // Inizializza posizione pallina
+        // Initialize
         updateBallPosition();
-        
-        // Carica la classifica all'avvio
-        loadLeaderboard();
-        
-        function loadLeaderboard() {
-            database.ref('leaderboard').orderByChild('score').limitToLast(5).once('value').then((snapshot) => {
-                leaderboard = [];
-                snapshot.forEach((childSnapshot) => {
-                    leaderboard.unshift({
-                        nickname: childSnapshot.val().nickname,
-                        score: childSnapshot.val().score
-                    });
-                });
-                displayLeaderboard();
-            }).catch((error) => {
-                console.error('Errore caricamento classifica:', error);
-                leaderboardList.innerHTML = 'Errore caricamento classifica';
-            });
-        }
+        displayLeaderboard();
         
         function displayLeaderboard() {
             if (leaderboard.length === 0) {
@@ -427,63 +472,63 @@
             return score > leaderboard[leaderboard.length - 1].score;
         }
         
+        function togglePause() {
+            if (!gameActive) return;
+            
+            gamePaused = !gamePaused;
+            
+            if (gamePaused) {
+                pauseOverlay.style.display = 'flex';
+                pauseBtn.classList.add('paused');
+                pauseIcon.textContent = '▶️';
+                pauseText.textContent = 'Riprendi';
+                stopGameLoop();
+            } else {
+                pauseOverlay.style.display = 'none';
+                pauseBtn.classList.remove('paused');
+                pauseIcon.textContent = '⏸️';
+                pauseText.textContent = 'Pausa';
+                startGameLoop();
+            }
+        }
+        
         function saveScore() {
-            console.log('saveScore chiamato');
-            
-            // Disabilita il bottone per prevenire click multipli
-            saveScoreBtn.disabled = true;
-            saveScoreBtn.textContent = 'Salvando...';
-            
             const nickname = nicknameInput.value.trim();
             if (!nickname) {
                 alert('Inserisci un nickname!');
                 nicknameInput.focus();
-                // Riabilita il bottone
-                saveScoreBtn.disabled = false;
-                saveScoreBtn.textContent = 'Salva Punteggio';
                 return;
             }
             
             const score = meteorsEvaded;
             const newEntry = {
                 nickname: nickname.substring(0, 8),
-                score: score,
-                timestamp: Date.now()
+                score: score
             };
             
-            console.log('Tentativo di salvataggio:', newEntry);
+            // Add to leaderboard and sort
+            leaderboard.push(newEntry);
+            leaderboard.sort((a, b) => b.score - a.score);
+            leaderboard = leaderboard.slice(0, 5);
             
-            database.ref('leaderboard').push(newEntry).then(() => {
-                console.log('Punteggio salvato con successo');
-                nicknamePanel.style.display = 'none';
-                loadLeaderboard();
-                // Riabilita il bottone
-                saveScoreBtn.disabled = false;
-                saveScoreBtn.textContent = 'Salva Punteggio';
-                setTimeout(() => {
-                    resetToLevel1();
-                    gameActive = true;
-                    startGameLoop();
-                }, 1000);
-            }).catch((error) => {
-                console.error('Errore salvataggio punteggio:', error);
-                alert('Errore nel salvataggio del punteggio: ' + error.message);
-                // Riabilita il bottone
-                saveScoreBtn.disabled = false;
-                saveScoreBtn.textContent = 'Salva Punteggio';
-            });
+            nicknamePanel.style.display = 'none';
+            displayLeaderboard();
+            
+            setTimeout(() => {
+                resetToLevel1();
+                gameActive = true;
+                startGameLoop();
+            }, 1000);
         }
         
         function startGame() {
             permissionPanel.style.display = 'none';
             
-            // Rimuovi event listeners esistenti se presenti
             removeEventListeners();
-            
-            // Registra nuovi event listeners
             registerEventListeners();
             
             gameActive = true;
+            gamePaused = false;
             updateLivesDisplay();
             startGameLoop();
         }
@@ -497,11 +542,16 @@
             }
         }
         
-                // Controlli da tastiera (PC)
+        // Keyboard controls
         let keysPressed = {};
 
         document.addEventListener("keydown", (e) => {
             keysPressed[e.key] = true;
+            // Spacebar to toggle pause
+            if (e.key === ' ' && gameActive) {
+                e.preventDefault();
+                togglePause();
+            }
         });
 
         document.addEventListener("keyup", (e) => {
@@ -509,9 +559,9 @@
         });
 
         function handleKeyboardControls() {
-            if (!gameActive) return;
+            if (!gameActive || gamePaused) return;
 
-            let speed = 5; // velocità di movimento con le frecce
+            let speed = 5;
 
             if (keysPressed["ArrowLeft"]) {
                 ballVelocity.x = -speed;
@@ -527,7 +577,7 @@
             }
         }
 
-                // Controlli con mouse (trascina la pallina)
+        // Mouse controls
         let mouseActive = false;
 
         document.addEventListener("mousedown", (e) => {
@@ -539,13 +589,12 @@
         });
 
         document.addEventListener("mousemove", (e) => {
-            if (mouseActive && gameActive) {
+            if (mouseActive && gameActive && !gamePaused) {
                 ballPosition.x = e.clientX;
                 ballPosition.y = e.clientY;
                 updateBallPosition();
             }
         });
-
 
         function removeEventListeners() {
             if (touchEventsRegistered) {
@@ -558,7 +607,7 @@
         
         function handleTouchStart(e) {
             e.preventDefault();
-            if (!gameActive) return;
+            if (!gameActive || gamePaused) return;
             
             touchActive = true;
             touchCenter.x = e.touches[0].clientX;
@@ -567,16 +616,14 @@
         
         function handleTouchMove(e) {
             e.preventDefault();
-            if (!touchActive || !gameActive) return;
+            if (!touchActive || !gameActive || gamePaused) return;
             
             let currentX = e.touches[0].clientX;
             let currentY = e.touches[0].clientY;
             
-            // Calcola la velocità basata sul movimento touch
             let deltaX = (currentX - touchCenter.x) / 30;
             let deltaY = (currentY - touchCenter.y) / 30;
             
-            // Limita i valori
             deltaX = Math.max(-8, Math.min(8, deltaX));
             deltaY = Math.max(-8, Math.min(8, deltaY));
             
@@ -588,25 +635,26 @@
             e.preventDefault();
             touchActive = false;
             
-            // Rallenta gradualmente
             ballVelocity.x *= 0.8;
             ballVelocity.y *= 0.8;
         }
         
         function startGameLoop() {
-            // Ferma il loop precedente se esiste
             if (gameLoopId) {
                 cancelAnimationFrame(gameLoopId);
             }
             
             function gameLoop() {
-                if (gameActive) {
-                    handleKeyboardControls(); // <<< aggiunto
+                if (gameActive && !gamePaused) {
+                    handleKeyboardControls();
                     updateBall();
                     updateMeteors();
                     spawnMeteors();
                     checkCollisions();
                     updateUI();
+                    gameLoopId = requestAnimationFrame(gameLoop);
+                } else if (gameActive && gamePaused) {
+                    // Keep the loop running but don't update game state
                     gameLoopId = requestAnimationFrame(gameLoop);
                 } else {
                     gameLoopId = null;
@@ -623,17 +671,14 @@
         }
         
         function updateBall() {
-            // Applica attrito quando non si tocca
             if (!touchActive) {
                 ballVelocity.x *= 0.92;
                 ballVelocity.y *= 0.92;
             }
             
-            // Aggiorna posizione
             ballPosition.x += ballVelocity.x;
             ballPosition.y += ballVelocity.y;
             
-            // Mantieni la pallina nei limiti dello schermo
             ballPosition.x = Math.max(20, Math.min(window.innerWidth - 20, ballPosition.x));
             ballPosition.y = Math.max(20, Math.min(window.innerHeight - 20, ballPosition.y));
             
@@ -668,17 +713,14 @@
                 let meteor = meteors[i];
                 meteor.y += meteorSpeed;
                 
-                // Aggiorna posizione visuale
                 meteor.element.style.left = meteor.x + 'px';
                 meteor.element.style.top = meteor.y + 'px';
                 
-                // Rimuovi meteore che sono uscite dallo schermo
                 if (meteor.y > window.innerHeight + 50) {
                     meteor.element.remove();
                     meteors.splice(i, 1);
                     meteorsEvaded++;
                     
-                    // Controlla level up
                     if (meteorsEvaded > 0 && meteorsEvaded % 15 === 0 && meteorsEvaded !== lastLevelUp) {
                         levelUp();
                         lastLevelUp = meteorsEvaded;
@@ -696,11 +738,8 @@
                 );
                 
                 if (distance < 35) {
-                    // Rimuovi la meteora che ha colpito
                     meteor.element.remove();
                     meteors.splice(i, 1);
-                    
-                    // Perdi una vita
                     loseLife();
                     break;
                 }
@@ -711,7 +750,6 @@
             lives--;
             updateLivesDisplay();
             
-            // Effetto visuale di impatto
             ball.style.transform = 'scale(1.3)';
             ball.style.boxShadow = '0 0 30px rgba(255, 0, 0, 0.8)';
             
@@ -720,12 +758,10 @@
                 ball.style.boxShadow = '0 0 20px rgba(0, 212, 255, 0.6)';
             }, 300);
             
-            // Vibrazione
             if ('vibrate' in navigator) {
                 navigator.vibrate([100, 50, 100]);
             }
             
-            // Controlla se il gioco è finito
             if (lives <= 0) {
                 setTimeout(() => {
                     gameOver();
@@ -749,16 +785,13 @@
             meteorSpeed += 0.8;
             meteorSpawnRate += 0.005;
             
-            // Mostra messaggio level up
             levelUpMessage.style.display = 'block';
             setTimeout(() => {
                 levelUpMessage.style.display = 'none';
             }, 2000);
             
-            // Effetti particelle
             createCelebrationParticles();
             
-            // Vibrazione se supportata
             if ('vibrate' in navigator) {
                 navigator.vibrate([200, 100, 200, 100, 200]);
             }
@@ -783,17 +816,20 @@
         }
         
         function gameOver() {
-            // Ferma immediatamente il gioco
             gameActive = false;
+            gamePaused = false;
             stopGameLoop();
             
-            // Reset stato touch
+            // Reset pause button state
+            pauseBtn.classList.remove('paused');
+            pauseIcon.textContent = '⏸️';
+            pauseText.textContent = 'Pausa';
+            pauseOverlay.style.display = 'none';
+            
             touchActive = false;
             
-            // Mostra messaggio game over
             gameOverMessage.style.display = 'block';
             
-            // Vibrazione se supportata
             if ('vibrate' in navigator) {
                 navigator.vibrate([500, 200, 500]);
             }
@@ -801,20 +837,15 @@
             setTimeout(() => {
                 gameOverMessage.style.display = 'none';
                 
-                // Controlla se il punteggio è da classifica
                 if (isTopScore(meteorsEvaded)) {
                     finalScore.textContent = meteorsEvaded;
                     nicknameInput.value = '';
                     nicknamePanel.style.display = 'block';
-                    // Focus sull'input dopo un breve ritardo per assicurarsi che sia visibile
                     setTimeout(() => {
                         nicknameInput.focus();
                     }, 100);
                 } else {
-                    // Resetta completamente tutto al livello 1
                     resetToLevel1();
-                    
-                    // Riavvia il gioco
                     gameActive = true;
                     startGameLoop();
                 }
@@ -822,21 +853,26 @@
         }
         
         function resetToLevel1() {
-            // VALORI INIZIALI HARDCODED per garantire il reset
             meteorsEvaded = 0;
             currentLevel = 1;
-            meteorSpeed = 2;           // Velocità iniziale livello 1
-            meteorSpawnRate = 0.02;    // Spawn rate iniziale livello 1
+            meteorSpeed = 2;
+            meteorSpawnRate = 0.02;
             lastLevelUp = 0;
             lives = 3;
             
-            // Reset posizione pallina
             ballPosition = { x: window.innerWidth / 2, y: window.innerHeight - 100 };
             ballVelocity = { x: 0, y: 0 };
             touchActive = false;
+            gamePaused = false;
+            
+            // Reset pause button
+            pauseBtn.classList.remove('paused');
+            pauseIcon.textContent = '⏸️';
+            pauseText.textContent = 'Pausa';
+            pauseOverlay.style.display = 'none';
+            
             updateBallPosition();
             
-            // Rimuovi tutte le meteore dal DOM e dall'array
             meteors.forEach(meteor => {
                 if (meteor.element && meteor.element.parentNode) {
                     meteor.element.remove();
@@ -844,11 +880,9 @@
             });
             meteors = [];
             
-            // Rimuovi anche eventuali particelle rimaste
             let particles = document.querySelectorAll('.particle');
             particles.forEach(particle => particle.remove());
             
-            // Aggiorna UI
             updateUI();
             updateLivesDisplay();
         }
@@ -858,32 +892,8 @@
             levelDisplay.textContent = `Livello: ${currentLevel}`;
         }
         
-        function resetGame() {
-            // Ferma tutto
-            gameActive = false;
-            stopGameLoop();
-            
-            // Reset completo al livello 1
-            resetToLevel1();
-            
-            // Reset UI messages
-            gameOverMessage.style.display = 'none';
-            levelUpMessage.style.display = 'none';
-            nicknamePanel.style.display = 'none';
-            
-            // Ricarica la classifica
-            loadLeaderboard();
-            
-            // Riavvia il gioco se era già iniziato
-            if (permissionPanel.style.display === 'none') {
-                gameActive = true;
-                startGameLoop();
-            }
-        }
-        
-        // Previeni scroll su mobile ma permetti input nel nickname
+        // Prevent scroll on mobile but allow input in nickname
         document.addEventListener('touchmove', function(e) {
-            // Permetti il touch nell'input del nickname e nel bottone
             if (e.target === nicknameInput || e.target === saveScoreBtn) {
                 return;
             }
@@ -892,7 +902,7 @@
             }
         }, { passive: false });
         
-        // Gestisci l'input del nickname con Enter
+        // Handle nickname input with Enter
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && nicknamePanel.style.display === 'block') {
                 e.preventDefault();
@@ -900,20 +910,18 @@
             }
         });
         
-        // Aggiungi event listener alternativo per il bottone
+        // Alternative event listener for save button
         document.addEventListener('DOMContentLoaded', function() {
             if (saveScoreBtn) {
                 saveScoreBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('Bottone cliccato');
                     saveScore();
                 });
                 
                 saveScoreBtn.addEventListener('touchend', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('Bottone toccato');
                     saveScore();
                 });
             }
@@ -921,3 +929,4 @@
     </script>
 </body>
 </html>
+                    
