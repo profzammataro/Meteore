@@ -139,20 +139,6 @@
             opacity: 0.5;
         }
         
-        .instructions {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255,255,255,0.8);
-            text-align: center;
-            font-size: 16px;
-            background: rgba(0,0,0,0.5);
-            padding: 15px 20px;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-        }
-        
         .reset-btn {
             position: absolute;
             top: 20px;
@@ -165,6 +151,7 @@
             cursor: pointer;
             font-size: 14px;
             transition: all 0.3s ease;
+            z-index: 20;
         }
         
         .reset-btn:hover {
@@ -225,6 +212,11 @@
         
         .permission-btn:active {
             transform: scale(0.95);
+        }
+        
+        .permission-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         
         .nickname-panel {
@@ -324,19 +316,22 @@
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
     
     <script>
-        // Firebase configuration
+        // Firebase configuration - CONFIGURAZIONE CORRETTA
         const firebaseConfig = {
-            apiKey: "AIzaSyCvHzTl8z3KRZ4QkKgO5FKQwKmkFJAF6xg",
+            apiKey: "AIzaSyDgbOSab7lRL1pKLFkT6MOlTFmtf-xf61Y",
             authDomain: "meteore-31062.firebaseapp.com",
             databaseURL: "https://meteore-31062-default-rtdb.europe-west1.firebasedatabase.app",
             projectId: "meteore-31062",
-            storageBucket: "meteore-31062.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef123456"
+            storageBucket: "meteore-31062.firebasestorage.app",
+            messagingSenderId: "723550096158",
+            appId: "1:723550096158:web:49005ffade790fe979d70f"
         };
         
+        // Initialize Firebase
+        console.log('Inizializzazione Firebase...');
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+        console.log('Firebase inizializzato!');
         
         let ball = document.getElementById('ball');
         let gameOverMessage = document.getElementById('gameOverMessage');
@@ -374,51 +369,91 @@
         
         // FUNZIONE CORRETTA: Carica TUTTI i punteggi e prende i TOP 5
         function loadLeaderboard() {
-            database.ref('leaderboard').once('value').then((snapshot) => {
+            console.log('Inizio caricamento classifica...');
+            leaderboardList.innerHTML = 'Caricamento classifica...';
+            
+            // Timeout di sicurezza
+            const timeoutId = setTimeout(() => {
+                console.warn('Timeout caricamento classifica');
                 leaderboard = [];
+                displayLeaderboard();
+            }, 5000);
+            
+            database.ref('leaderboard').once('value').then((snapshot) => {
+                clearTimeout(timeoutId);
+                console.log('Snapshot ricevuto:', snapshot.exists());
+                
+                leaderboard = [];
+                
+                if (!snapshot.exists()) {
+                    console.log('Nessun dato nel database');
+                    displayLeaderboard();
+                    return;
+                }
+                
                 snapshot.forEach((childSnapshot) => {
-                    leaderboard.push({
-                        key: childSnapshot.key,
-                        nickname: childSnapshot.val().nickname,
-                        score: childSnapshot.val().score,
-                        timestamp: childSnapshot.val().timestamp || 0
-                    });
+                    try {
+                        const data = childSnapshot.val();
+                        if (data && typeof data.score === 'number' && data.nickname) {
+                            leaderboard.push({
+                                key: childSnapshot.key,
+                                nickname: data.nickname,
+                                score: data.score,
+                                timestamp: data.timestamp || 0
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Errore parsing entry:', e);
+                    }
                 });
+                
+                console.log('Punteggi caricati:', leaderboard.length);
                 
                 // Ordina per punteggio decrescente
                 leaderboard.sort((a, b) => b.score - a.score);
                 
                 // Mantieni solo i TOP 5
+                const allScores = [...leaderboard];
                 leaderboard = leaderboard.slice(0, 5);
                 
-                console.log('Classifica caricata:', leaderboard);
+                console.log('TOP 5:', leaderboard);
                 displayLeaderboard();
                 
-                // PULIZIA: Rimuovi dal database i punteggi che non sono nella TOP 5
-                cleanupOldScores(snapshot);
+                // PULIZIA: Rimuovi dal database i punteggi che non sono nella TOP 5 (in background)
+                if (allScores.length > 5) {
+                    setTimeout(() => cleanupOldScores(allScores), 1000);
+                }
             }).catch((error) => {
+                clearTimeout(timeoutId);
                 console.error('Errore caricamento classifica:', error);
-                leaderboardList.innerHTML = 'Errore caricamento classifica';
+                leaderboard = [];
+                leaderboardList.innerHTML = 'Nessun punteggio salvato';
             });
         }
         
         // NUOVA FUNZIONE: Pulisce i punteggi vecchi dal database
-        function cleanupOldScores(snapshot) {
-            const topKeys = new Set(leaderboard.map(entry => entry.key));
-            const deletions = [];
-            
-            snapshot.forEach((childSnapshot) => {
-                if (!topKeys.has(childSnapshot.key)) {
-                    deletions.push(database.ref('leaderboard/' + childSnapshot.key).remove());
+        function cleanupOldScores(allScores) {
+            try {
+                const topKeys = new Set(leaderboard.map(entry => entry.key));
+                const deletions = [];
+                
+                for (let i = 5; i < allScores.length; i++) {
+                    const key = allScores[i].key;
+                    if (key && !topKeys.has(key)) {
+                        deletions.push(database.ref('leaderboard/' + key).remove());
+                    }
                 }
-            });
-            
-            if (deletions.length > 0) {
-                Promise.all(deletions).then(() => {
-                    console.log(`Rimossi ${deletions.length} punteggi vecchi dal database`);
-                }).catch((error) => {
-                    console.error('Errore pulizia database:', error);
-                });
+                
+                if (deletions.length > 0) {
+                    console.log(`Pulizia di ${deletions.length} punteggi vecchi...`);
+                    Promise.all(deletions).then(() => {
+                        console.log('Pulizia completata');
+                    }).catch((error) => {
+                        console.error('Errore pulizia database:', error);
+                    });
+                }
+            } catch (e) {
+                console.error('Errore in cleanupOldScores:', e);
             }
         }
         
@@ -442,9 +477,14 @@
         }
         
         function isTopScore(score) {
-            console.log('Controllo punteggio:', score, 'Classifica:', leaderboard);
-            if (leaderboard.length < 5) return true;
-            return score > leaderboard[4].score; // Confronta con il 5° posto
+            console.log('Controllo punteggio:', score, 'Classifica attuale:', leaderboard);
+            if (leaderboard.length < 5) {
+                console.log('Classifica non piena, punteggio accettato');
+                return true;
+            }
+            const isTop = score > leaderboard[4].score;
+            console.log('Confronto con 5° posto:', leaderboard[4].score, 'Risultato:', isTop);
+            return isTop;
         }
         
         function saveScore() {
@@ -475,49 +515,6 @@
                 console.log('Punteggio salvato con successo');
                 nicknamePanel.style.display = 'none';
                 loadLeaderboard();
-            
-            if (permissionPanel.style.display === 'none') {
-                gameActive = true;
-                startGameLoop();
-            }
-        }
-        
-        document.addEventListener('touchmove', function(e) {
-            if (e.target === nicknameInput || e.target === saveScoreBtn) {
-                return;
-            }
-            if (touchEventsRegistered) {
-                e.preventDefault();
-            }
-        }, { passive: false });
-        
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && nicknamePanel.style.display === 'block') {
-                e.preventDefault();
-                saveScore();
-            }
-        });
-        
-        document.addEventListener('DOMContentLoaded', function() {
-            if (saveScoreBtn) {
-                saveScoreBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Bottone cliccato');
-                    saveScore();
-                });
-                
-                saveScoreBtn.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Bottone toccato');
-                    saveScore();
-                });
-            }
-        });
-    </script>
-</body>
-</html>
                 saveScoreBtn.disabled = false;
                 saveScoreBtn.textContent = 'Salva Punteggio';
                 setTimeout(() => {
@@ -820,17 +817,4 @@
         }
         
         function updateUI() {
-            scoreDisplay.textContent = `Meteore Evitate: ${meteorsEvaded}`;
-            levelDisplay.textContent = `Livello: ${currentLevel}`;
-        }
-        
-        function resetGame() {
-            gameActive = false;
-            stopGameLoop();
-            resetToLevel1();
-            
-            gameOverMessage.style.display = 'none';
-            levelUpMessage.style.display = 'none';
-            nicknamePanel.style.display = 'none';
-            
-            loadLeaderboard();
+            scoreDisplay.textContent = `Meteore
