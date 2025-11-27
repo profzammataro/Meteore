@@ -780,4 +780,43 @@
             meteorSpawnRate = 0.02;
             lastLevelUp = 0;
             lives = 3;
-            ballPosition = { x: window.innerWidth / 2, y: window.innerHeight -
+            ballPosition = { x: window.innerWidth / 2, y: window.innerHeight - 100 };
+            ballVelocity = { x: 0, y: 0 };
+            touchActive = false;
+            gamePaused = false;
+            pauseBtn.classList.remove('paused');
+            pauseIcon.textContent = '⏸️';
+            pauseText.textContent = 'Pausa';
+            pauseOverlay.style.display = 'none';
+            updateBallPosition();
+            meteors.forEach(meteor => {
+                if (meteor.element && meteor.element.parentNode) {
+                    meteor.element.remove();
+                }
+            });
+            meteors = [];
+            let particles = document.querySelectorAll('.particle');
+            particles.forEach(particle => particle.remove());
+            updateUI();
+            updateLivesDisplay();
+        }
+        
+        function updateUI() {
+            scoreDisplay.textContent = `Meteore Evitate: ${meteorsEvaded}`;
+            levelDisplay.textContent = `Livello: ${currentLevel}`;
+        }
+        
+        document.addEventListener('touchmove', function(e) {
+            if (e.target === nicknameInput) return;
+            if (touchEventsRegistered) e.preventDefault();
+        }, { passive: false });
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && nicknamePanel.style.display === 'block') {
+                e.preventDefault();
+                window.saveScore();
+            }
+        });
+    </script>
+</body>
+</html>
